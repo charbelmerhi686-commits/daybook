@@ -764,11 +764,22 @@
   });
 
   function uid(){ return Date.now().toString(36) + Math.random().toString(36).slice(2,8); }
-  function todayISO(){ return new Date().toISOString().slice(0,10); }
+  // Local calendar date as YYYY-MM-DD. Deliberately NOT toISOString() (which is
+  // UTC) — in any timezone ahead of UTC, converting a local midnight to UTC
+  // rolls it back to the previous day, silently corrupting every date-math
+  // helper built on it (this caused analytics to loop thousands of times
+  // building a chart and crash the tab for anyone east of Greenwich).
+  function toISODate(d){
+    var y = d.getFullYear();
+    var m = String(d.getMonth()+1).padStart(2,"0");
+    var day = String(d.getDate()).padStart(2,"0");
+    return y + "-" + m + "-" + day;
+  }
+  function todayISO(){ return toISODate(new Date()); }
   function daysAgoISO(n){
     var d = new Date();
     d.setDate(d.getDate()-n);
-    return d.toISOString().slice(0,10);
+    return toISODate(d);
   }
 
   function seedExamples(){
@@ -993,7 +1004,7 @@
       var toMonth = monthToEl.value || monthFromEl.value || monthNowISO();
       var d = new Date(toMonth + "-01T00:00:00");
       d.setMonth(d.getMonth()+1); d.setDate(0);
-      return d.toISOString().slice(0,10);
+      return toISODate(d);
     }
     return todayISO();
   }
@@ -1081,7 +1092,7 @@
   function addDaysISO(iso, n){
     var d = new Date(iso+"T00:00:00");
     d.setDate(d.getDate()+n);
-    return d.toISOString().slice(0,10);
+    return toISODate(d);
   }
 
   function svgEl(tag, attrs){
@@ -1192,13 +1203,15 @@
     } else {
       var d = new Date(start+"T00:00:00");
       d.setDate(1);
-      while (d.toISOString().slice(0,10) <= end){
-        var from = d.toISOString().slice(0,10);
+      var guard2 = 0;
+      while (toISODate(d) <= end && guard2 < 600){
+        var from = toISODate(d);
         var nd = new Date(d); nd.setMonth(nd.getMonth()+1); nd.setDate(0);
-        var to2 = nd.toISOString().slice(0,10);
+        var to2 = toISODate(nd);
         if (to2 > end) to2 = end;
         buckets.push({label: d.toLocaleDateString(undefined,{month:"short"}), from:from, to:to2});
         d.setMonth(d.getMonth()+1); d.setDate(1);
+        guard2++;
       }
     }
     buckets.forEach(function(b){
