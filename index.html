@@ -34,6 +34,8 @@
     --income-soft: #e3f1e0;
     --expense: #b23a3a;
     --expense-soft: #f7e6e2;
+    --warning: #a6720a;
+    --warning-soft: #f5ecd8;
     --shadow: 0 1px 2px rgba(23,20,15,0.06), 0 8px 24px -12px rgba(23,20,15,0.18);
     --cat-1: #2a78d6; --cat-2: #eb6834; --cat-3: #1baf7a; --cat-4: #b3830a;
     --cat-5: #d5588a; --cat-6: #1f7a2e; --cat-7: #4a3aa7; --cat-8: #c73f3f;
@@ -58,6 +60,8 @@
       --income-soft: #1c2c1a;
       --expense: #e2726b;
       --expense-soft: #33201d;
+      --warning: #e0ab4a;
+      --warning-soft: #3a2f1a;
       --shadow: 0 1px 2px rgba(0,0,0,0.3), 0 12px 28px -14px rgba(0,0,0,0.6);
       --cat-1: #3987e5; --cat-2: #d97a4a; --cat-3: #2ec48c; --cat-4: #d1a136;
       --cat-5: #d55181; --cat-6: #4fb04f; --cat-7: #9085e9; --cat-8: #e66767;
@@ -82,6 +86,8 @@
     --income-soft: #1c2c1a;
     --expense: #e2726b;
     --expense-soft: #33201d;
+    --warning: #e0ab4a;
+    --warning-soft: #3a2f1a;
     --shadow: 0 1px 2px rgba(0,0,0,0.3), 0 12px 28px -14px rgba(0,0,0,0.6);
     --cat-1: #3987e5; --cat-2: #d97a4a; --cat-3: #2ec48c; --cat-4: #d1a136;
     --cat-5: #d55181; --cat-6: #4fb04f; --cat-7: #9085e9; --cat-8: #e66767;
@@ -181,6 +187,15 @@
   }
   .entry .del:hover{ background: var(--expense-soft); color: var(--expense); }
   .empty-state{ text-align:center; padding: 34px 10px; color: var(--ink-muted); font-size:14px; }
+  .credit-badge{
+    display:inline-flex; align-items:center; gap:5px; font-size:11px; font-weight:700;
+    padding:3px 9px; border-radius:999px; margin-top:5px; border:none; -webkit-tap-highlight-color:transparent;
+  }
+  .credit-badge.unpaid{ background: var(--warning-soft); color: var(--warning); }
+  .credit-badge.paid{ background: var(--income-soft); color: var(--income); }
+
+  .pm-bar{ display:flex; height:10px; border-radius:6px; overflow:hidden; gap:2px; background: var(--border); margin: 4px 0 14px; }
+  .pm-bar .seg{ height:100%; }
 
   /* ---------- Quick add trigger on Today ---------- */
   .add-strip{
@@ -301,6 +316,8 @@
   .type-toggle button{ flex:1; border:none; background:none; padding:9px; border-radius:9px; font-size:14px; font-weight:700; color: var(--ink-muted); }
   .type-toggle button.active.expense{ background: var(--expense-soft); color: var(--expense); }
   .type-toggle button.active.income{ background: var(--income-soft); color: var(--income); }
+  .type-toggle.secondary{ padding:3px; margin-bottom:0; }
+  .type-toggle.secondary button.active{ background: var(--accent-soft); color: var(--ink); }
   .field{ margin-bottom:16px; }
   .field label{ display:block; font-size:12px; font-weight:600; color: var(--ink-2); text-transform:uppercase; letter-spacing:0.04em; margin-bottom:7px; }
   .amount-input{ display:flex; align-items:baseline; gap:6px; border-bottom:2px solid var(--border-strong); padding-bottom:8px; }
@@ -355,7 +372,7 @@
             <div class="t-value mono" id="todayNet">$0.00</div>
           </div>
         </div>
-        <div class="stat-row" style="grid-template-columns:repeat(2,1fr);">
+        <div class="stat-row" style="grid-template-columns:repeat(3,1fr);">
           <div class="stat-tile income">
             <div class="t-label">Overall in</div>
             <div class="t-value mono" id="overallIn">$0.00</div>
@@ -363,6 +380,10 @@
           <div class="stat-tile expense">
             <div class="t-label">Overall out</div>
             <div class="t-value mono" id="overallOut">$0.00</div>
+          </div>
+          <div class="stat-tile">
+            <div class="t-label">Credit due</div>
+            <div class="t-value mono" id="creditDue" style="color:var(--warning);">$0.00</div>
           </div>
         </div>
       </div>
@@ -432,6 +453,13 @@
         </div>
         <div id="donutWrap" style="position:relative;"></div>
         <div class="cat-legend" id="donutLegend"></div>
+      </div>
+
+      <div class="chart-card">
+        <h3>Cash vs. credit income</h3>
+        <div class="sub" id="pmSub">How income arrived, and what's still owed to you</div>
+        <div class="pm-bar" id="pmBar"></div>
+        <div class="cat-legend" id="pmLegend"></div>
       </div>
     </section>
 
@@ -505,6 +533,13 @@
       <div class="type-toggle">
         <button type="button" class="active expense" data-type="expense">Expense</button>
         <button type="button" class="income" data-type="income">Income</button>
+      </div>
+      <div class="field" id="paymentMethodField" hidden>
+        <label>Payment</label>
+        <div class="type-toggle secondary" id="paymentToggle">
+          <button type="button" class="active" data-payment="cash">Cash</button>
+          <button type="button" data-payment="credit">Credit</button>
+        </div>
       </div>
       <div class="field">
         <label>Amount</label>
@@ -868,10 +903,16 @@
       ? "Across " + all.length + " " + (all.length===1?"entry":"entries")
       : "No entries yet";
 
-    var overallIn=0, overallOut=0;
-    all.forEach(function(t){ if (t.type==="income") overallIn+=t.amount; else overallOut+=t.amount; });
+    var overallIn=0, overallOut=0, creditDue=0;
+    all.forEach(function(t){
+      if (t.type==="income"){
+        overallIn+=t.amount;
+        if (t.paymentMethod==="credit" && !t.paid) creditDue+=t.amount;
+      } else overallOut+=t.amount;
+    });
     document.getElementById("overallIn").textContent = formatMoney(overallIn);
     document.getElementById("overallOut").textContent = formatMoney(overallOut);
+    document.getElementById("creditDue").textContent = formatMoney(creditDue);
 
     var t0 = todayISO();
     var todays = all.filter(function(t){ return t.date === t0; });
@@ -895,14 +936,27 @@
     var row = document.createElement("div");
     row.className = "entry";
     var color = catColor(catIndex(t.type, t.category));
+    var isCredit = t.type === "income" && t.paymentMethod === "credit";
+    var creditBadge = isCredit
+      ? '<button type="button" class="credit-badge '+(t.paid ? "paid" : "unpaid")+'">'+(t.paid ? "Credit · Paid" : "Credit · Unpaid")+'</button>'
+      : "";
     row.innerHTML =
       '<span class="swatch" style="background:'+color+'"></span>' +
       '<div class="body">' +
         '<div class="cat">'+catLabel(t.type, t.category)+'</div>' +
         (t.note ? '<div class="note">'+escapeHtml(t.note)+'</div>' : '') +
+        creditBadge +
       '</div>' +
       '<div class="amt '+t.type+'">'+(t.type==="income"?"+":"−")+formatMoney(t.amount).replace(/^\D*/,"")+'</div>' +
       '<button class="del" type="button" aria-label="Delete entry">×</button>';
+    if (isCredit){
+      row.querySelector(".credit-badge").addEventListener("click", function(e){
+        e.stopPropagation();
+        t.paid = !t.paid;
+        save();
+        renderToday(); renderHistory();
+      });
+    }
     row.querySelector(".del").addEventListener("click", function(e){
       e.stopPropagation();
       showConfirm("Delete this entry?", "Delete").then(function(ok){
@@ -1019,6 +1073,8 @@
       document.getElementById("barChartWrap").innerHTML = "";
       document.getElementById("donutWrap").innerHTML = "";
       document.getElementById("donutLegend").innerHTML = "";
+      document.getElementById("pmBar").innerHTML = "";
+      document.getElementById("pmLegend").innerHTML = "";
     }
   }
 
@@ -1042,6 +1098,8 @@
       document.getElementById("barChartWrap").innerHTML = '<div class="empty-state">Log your first entry to see this chart.</div>';
       document.getElementById("donutWrap").innerHTML = "";
       document.getElementById("donutLegend").innerHTML = '<div class="empty-state">Log your first entry to see this chart.</div>';
+      document.getElementById("pmBar").innerHTML = "";
+      document.getElementById("pmLegend").innerHTML = '<div class="empty-state">Log your first entry to see this chart.</div>';
       document.getElementById("balSub").textContent = "";
       document.getElementById("barSub").textContent = "";
       return;
@@ -1059,6 +1117,11 @@
       console.error("Daybook: donut chart failed", e);
       document.getElementById("donutWrap").innerHTML = "";
       document.getElementById("donutLegend").innerHTML = '<div class="empty-state">Couldn’t draw this chart.</div>';
+    }
+    try { renderPaymentBreakdown(inRange); } catch(e){
+      console.error("Daybook: payment breakdown failed", e);
+      document.getElementById("pmBar").innerHTML = "";
+      document.getElementById("pmLegend").innerHTML = '<div class="empty-state">Couldn’t draw this chart.</div>';
     }
 
     document.getElementById("balSub").textContent = formatShort(start) + " – " + formatShort(end);
@@ -1340,10 +1403,55 @@
            " L "+x0i+" "+y0i+" A "+rInner+" "+rInner+" 0 "+large+" 0 "+x1i+" "+y1i+" Z";
   }
 
+  function renderPaymentBreakdown(inRange){
+    var barEl = document.getElementById("pmBar");
+    var legendEl = document.getElementById("pmLegend");
+    barEl.innerHTML = ""; legendEl.innerHTML = "";
+
+    var cash=0, creditPaid=0, creditUnpaid=0;
+    inRange.filter(function(t){ return t.type==="income"; }).forEach(function(t){
+      if (t.paymentMethod === "credit"){
+        if (t.paid) creditPaid += t.amount; else creditUnpaid += t.amount;
+      } else {
+        cash += t.amount;
+      }
+    });
+    var total = cash + creditPaid + creditUnpaid;
+    if (total <= 0){
+      legendEl.innerHTML = '<div class="empty-state" style="padding:10px;">No income in this range.</div>';
+      return;
+    }
+
+    var segments = [
+      {label:"Cash", value:cash, cssVar:"--income"},
+      {label:"Credit · Paid", value:creditPaid, cssVar:"--accent"},
+      {label:"Credit · Unpaid", value:creditUnpaid, cssVar:"--warning"}
+    ];
+
+    segments.forEach(function(s){
+      if (s.value <= 0) return;
+      var color = getComputedStyle(document.documentElement).getPropertyValue(s.cssVar).trim();
+      var frac = s.value/total;
+
+      var seg = document.createElement("div");
+      seg.className = "seg";
+      seg.style.background = color;
+      seg.style.width = (frac*100) + "%";
+      barEl.appendChild(seg);
+
+      var row = document.createElement("div");
+      row.className = "row";
+      row.innerHTML = '<span class="sw" style="background:'+color+'"></span><span class="name">'+s.label+'</span><span class="pct">'+Math.round(frac*100)+'%</span><span class="amt mono">'+formatMoney(s.value)+'</span>';
+      legendEl.appendChild(row);
+    });
+  }
+
   // ---------- add / edit sheet ----------
   var sheetOverlay = document.getElementById("sheetOverlay");
   var currentType = "expense";
   var editingId = null;
+
+  var currentPayment = "cash";
 
   function openSheet(entry){
     editingId = entry ? entry.id : null;
@@ -1354,6 +1462,7 @@
     document.getElementById("amountInput").value = entry ? entry.amount : "";
     document.getElementById("noteInput").value = entry ? (entry.note || "") : "";
     setType(entry ? entry.type : "expense", entry ? entry.category : null);
+    setPayment(entry && entry.paymentMethod === "credit" ? "credit" : "cash");
     sheetOverlay.hidden = false;
     setTimeout(function(){ document.getElementById("amountInput").focus(); }, 50);
   }
@@ -1365,13 +1474,24 @@
 
   function setType(type, preferredCatId){
     currentType = type;
-    document.querySelectorAll(".type-toggle button").forEach(function(b){
+    document.querySelectorAll(".type-toggle button[data-type]").forEach(function(b){
       b.classList.toggle("active", b.dataset.type === type);
     });
+    document.getElementById("paymentMethodField").hidden = (type !== "income");
     renderChips(preferredCatId);
   }
-  document.querySelectorAll(".type-toggle button").forEach(function(b){
+  document.querySelectorAll(".type-toggle button[data-type]").forEach(function(b){
     b.addEventListener("click", function(){ setType(b.dataset.type); });
+  });
+
+  function setPayment(method){
+    currentPayment = method;
+    document.querySelectorAll("#paymentToggle button[data-payment]").forEach(function(b){
+      b.classList.toggle("active", b.dataset.payment === method);
+    });
+  }
+  document.querySelectorAll("#paymentToggle button[data-payment]").forEach(function(b){
+    b.addEventListener("click", function(){ setPayment(b.dataset.payment); });
   });
 
   var selectedCat = null;
@@ -1402,20 +1522,25 @@
     var date = document.getElementById("dateInput").value || todayISO();
     var note = document.getElementById("noteInput").value.trim();
     var wasEdit = !!editingId;
+    var paymentMethod = currentType === "income" ? currentPayment : undefined;
     if (wasEdit){
       var existing = state.tx.filter(function(x){ return x.id === editingId; })[0];
       if (existing){
+        var keepPaid = paymentMethod === "credit" && existing.paymentMethod === "credit" ? !!existing.paid : false;
         existing.type = currentType;
         existing.category = selectedCat;
         existing.amount = Math.round(amt*100)/100;
         existing.date = date;
         existing.note = note;
         existing.example = false;
+        existing.paymentMethod = paymentMethod;
+        existing.paid = paymentMethod === "credit" ? keepPaid : undefined;
       }
     } else {
       state.tx.push({
         id: uid(), type: currentType, category: selectedCat, amount: Math.round(amt*100)/100,
-        date: date, note: note, example:false, createdAt: Date.now()
+        date: date, note: note, example:false, createdAt: Date.now(),
+        paymentMethod: paymentMethod, paid: paymentMethod === "credit" ? false : undefined
       });
     }
     save();
