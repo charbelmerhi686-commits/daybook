@@ -999,7 +999,21 @@
   }
 
   function renderAnalytics(){
-    var all = state.tx.slice().sort(function(a,b){ return a.date.localeCompare(b.date) || a.createdAt-b.createdAt; });
+    try {
+      renderAnalyticsUnsafe();
+    } catch(e){
+      console.error("Daybook: analytics render failed", e);
+      var msg = "Analytics couldn't load (" + (e && e.message ? e.message : "unknown error") + "). Your data is safe — this is just a display bug.";
+      document.getElementById("balChartWrap").innerHTML = '<div class="empty-state">' + escapeHtml(msg) + '</div>';
+      document.getElementById("barChartWrap").innerHTML = "";
+      document.getElementById("donutWrap").innerHTML = "";
+      document.getElementById("donutLegend").innerHTML = "";
+    }
+  }
+
+  function renderAnalyticsUnsafe(){
+    var all = state.tx.slice().filter(function(t){ return t && typeof t.date === "string" && typeof t.amount === "number"; })
+      .sort(function(a,b){ return a.date.localeCompare(b.date) || (a.createdAt||0)-(b.createdAt||0); });
     var start = rangeStartISO();
     var end = rangeEndISO();
     var inRange = all.filter(function(t){ return t.date >= start && t.date <= end; });
@@ -1012,7 +1026,7 @@
     document.getElementById("mNet").textContent = formatMoney(inc-exp);
     document.getElementById("mAvg").textContent = formatMoney((inc-exp)/dayCount);
 
-    if (!state.tx.length){
+    if (!all.length){
       document.getElementById("balChartWrap").innerHTML = '<div class="empty-state">Log your first entry to see this chart.</div>';
       document.getElementById("barChartWrap").innerHTML = '<div class="empty-state">Log your first entry to see this chart.</div>';
       document.getElementById("donutWrap").innerHTML = "";
