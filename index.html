@@ -969,7 +969,7 @@
     var order = [];
     state.tx.filter(function(t){ return t.type==="income" && t.paymentMethod==="credit" && !t.paid; })
       .forEach(function(t){
-        var raw = (t.payer || "").trim();
+        var raw = (t.payer || t.note || "").trim();
         var key = raw ? raw.toLowerCase() : "unnamed";
         if (!accounts[key]){
           accounts[key] = {name: raw || "No name", total: 0, count: 0};
@@ -1011,7 +1011,8 @@
     row.className = "entry";
     var color = catColor(catIndex(t.type, t.category));
     var isCredit = t.type === "income" && t.paymentMethod === "credit";
-    var creditLabel = (t.payer ? escapeHtml(t.payer) : "Credit") + " · " + (t.paid ? "Paid" : "Unpaid");
+    var creditName = t.payer || t.note;
+    var creditLabel = (creditName ? escapeHtml(creditName) : "Credit") + " · " + (t.paid ? "Paid" : "Unpaid");
     var creditBadge = isCredit
       ? '<button type="button" class="credit-badge '+(t.paid ? "paid" : "unpaid")+'">'+creditLabel+'</button>'
       : "";
