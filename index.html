@@ -37,6 +37,7 @@
     --shadow: 0 1px 2px rgba(23,20,15,0.06), 0 8px 24px -12px rgba(23,20,15,0.18);
     --cat-1: #2a78d6; --cat-2: #eb6834; --cat-3: #1baf7a; --cat-4: #b3830a;
     --cat-5: #d5588a; --cat-6: #1f7a2e; --cat-7: #4a3aa7; --cat-8: #c73f3f;
+    --cat-9: #8a5a2b;
   }
   @media (prefers-color-scheme: dark){
     :root:not([data-theme="light"]){
@@ -60,6 +61,7 @@
       --shadow: 0 1px 2px rgba(0,0,0,0.3), 0 12px 28px -14px rgba(0,0,0,0.6);
       --cat-1: #3987e5; --cat-2: #d97a4a; --cat-3: #2ec48c; --cat-4: #d1a136;
       --cat-5: #d55181; --cat-6: #4fb04f; --cat-7: #9085e9; --cat-8: #e66767;
+      --cat-9: #c9a06a;
     }
   }
   :root[data-theme="dark"]{
@@ -83,6 +85,7 @@
     --shadow: 0 1px 2px rgba(0,0,0,0.3), 0 12px 28px -14px rgba(0,0,0,0.6);
     --cat-1: #3987e5; --cat-2: #d97a4a; --cat-3: #2ec48c; --cat-4: #d1a136;
     --cat-5: #d55181; --cat-6: #4fb04f; --cat-7: #9085e9; --cat-8: #e66767;
+    --cat-9: #c9a06a;
   }
 
   *{ box-sizing:border-box; -webkit-tap-highlight-color: transparent; }
@@ -148,14 +151,6 @@
   .stat-tile.income .t-value{ color: var(--income); }
   .stat-tile.expense .t-value{ color: var(--expense); }
 
-  .example-banner{
-    display:flex; align-items:center; gap:10px;
-    background: var(--surface-raised); border:1px dashed var(--border-strong);
-    border-radius: 14px; padding: 10px 14px; font-size: 13px; color: var(--ink-2);
-  }
-  .example-banner button{
-    margin-left:auto; background:none; border:none; color:var(--accent); font-weight:700; font-size:13px; padding:4px 6px; white-space:nowrap;
-  }
 
   .section-head{ display:flex; align-items:baseline; justify-content:space-between; margin-bottom: 2px; }
   .section-head h2{ font-size: 17px; font-weight:600; margin:0; }
@@ -168,7 +163,7 @@
   .day-heading .d-label{ font-size:13px; font-weight:700; color: var(--ink-2); text-transform:uppercase; letter-spacing:0.04em; }
   .day-heading .d-net{ font-size:13px; font-weight:600; }
   .entry{
-    display:flex; align-items:center; gap:12px;
+    display:flex; align-items:center; gap:12px; cursor:pointer;
     background: var(--surface-raised); border:1px solid var(--border);
     border-radius: 14px; padding: 11px 12px;
   }
@@ -218,21 +213,24 @@
   nav.tabbar button.active svg{ stroke: var(--accent); }
 
   .fab{
-    position: fixed; left:50%; transform: translateX(calc(-50% + 190px));
+    position: fixed; right: max(24px, calc(50vw - 216px));
     bottom: calc(env(safe-area-inset-bottom,0px) + 74px);
     width:52px; height:52px; border-radius:50%; border:none;
     background: var(--accent); color: var(--accent-ink); font-size:26px; font-weight:400;
     box-shadow: var(--shadow); z-index: 21; display:flex; align-items:center; justify-content:center;
   }
-  @media (min-width:481px){ .fab{ transform: translateX(calc(-50% + 190px)); } }
 
   /* ---------- Analytics ---------- */
-  .range-pills{ display:flex; gap:8px; }
+  .range-pills{ display:flex; flex-wrap:wrap; gap:8px; }
   .range-pills button{
     border:1px solid var(--border-strong); background: var(--surface-raised); color: var(--ink-2);
     font-size:12.5px; font-weight:600; padding:6px 12px; border-radius:999px;
   }
   .range-pills button.active{ background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+
+  .month-range{ display:flex; align-items:center; gap:10px; margin-top:10px; }
+  .month-range .text-input{ flex:1; padding:9px 11px; font-size:13.5px; }
+  .month-range span{ font-size:12.5px; color:var(--ink-muted); flex:none; }
 
   .metric-grid{ display:grid; grid-template-columns:1fr 1fr; gap:10px; }
   .metric-card{ background: var(--surface-raised); border:1px solid var(--border); border-radius:14px; padding:12px 14px; }
@@ -338,10 +336,6 @@
 
     <!-- ============ TODAY ============ -->
     <section class="screen" id="screen-today">
-      <div id="exampleBanner" class="example-banner" hidden>
-        <span>Your ledger starts at zero.</span>
-        <button id="clearExamplesBtn" type="button">Clear it</button>
-      </div>
 
       <div class="hero">
         <div class="label">Balance carried forward</div>
@@ -359,6 +353,16 @@
           <div class="stat-tile">
             <div class="t-label">Net today</div>
             <div class="t-value mono" id="todayNet">$0.00</div>
+          </div>
+        </div>
+        <div class="stat-row" style="grid-template-columns:repeat(2,1fr);">
+          <div class="stat-tile income">
+            <div class="t-label">Overall in</div>
+            <div class="t-value mono" id="overallIn">$0.00</div>
+          </div>
+          <div class="stat-tile expense">
+            <div class="t-label">Overall out</div>
+            <div class="t-value mono" id="overallOut">$0.00</div>
           </div>
         </div>
       </div>
@@ -386,6 +390,13 @@
         <button data-range="30" type="button" class="active">30D</button>
         <button data-range="90" type="button">90D</button>
         <button data-range="all" type="button">All</button>
+        <button data-range="month" type="button">Month</button>
+      </div>
+
+      <div class="month-range" id="monthRangeRow" hidden>
+        <input class="text-input" id="monthFrom" type="month">
+        <span>to</span>
+        <input class="text-input" id="monthTo" type="month">
       </div>
 
       <div class="metric-grid">
@@ -490,7 +501,7 @@
   <div class="overlay" id="sheetOverlay" hidden>
     <div class="sheet">
       <div class="sheet-handle"></div>
-      <h2>New entry</h2>
+      <h2 id="sheetTitle">New entry</h2>
       <div class="type-toggle">
         <button type="button" class="active expense" data-type="expense">Expense</button>
         <button type="button" class="income" data-type="income">Income</button>
@@ -551,9 +562,10 @@
 
   var EXPENSE_CATS = [
     {id:"food", label:"Food & Drink"},
-    {id:"transport", label:"Transport"},
-    {id:"housing", label:"Housing"},
-    {id:"bills", label:"Bills & Utilities"},
+    {id:"fuel", label:"Fuel"},
+    {id:"electricity", label:"Electricity"},
+    {id:"internet", label:"Internet"},
+    {id:"phone", label:"Phone"},
     {id:"health", label:"Health"},
     {id:"shopping", label:"Shopping"},
     {id:"entertainment", label:"Entertainment"},
@@ -566,9 +578,9 @@
     {id:"investment", label:"Investment"},
     {id:"other", label:"Other"}
   ];
-  var CAT_VARS = ["--cat-1","--cat-2","--cat-3","--cat-4","--cat-5","--cat-6","--cat-7","--cat-8"];
+  var CAT_VARS = ["--cat-1","--cat-2","--cat-3","--cat-4","--cat-5","--cat-6","--cat-7","--cat-8","--cat-9"];
 
-  function catColor(index){ return getComputedStyle(document.documentElement).getPropertyValue(CAT_VARS[index % 8]).trim(); }
+  function catColor(index){ return getComputedStyle(document.documentElement).getPropertyValue(CAT_VARS[index % CAT_VARS.length]).trim(); }
   function catList(type){ return type === "income" ? INCOME_CATS : EXPENSE_CATS; }
   function catLabel(type, id){
     var list = catList(type);
@@ -845,6 +857,11 @@
       ? "Across " + all.length + " " + (all.length===1?"entry":"entries")
       : "No entries yet";
 
+    var overallIn=0, overallOut=0;
+    all.forEach(function(t){ if (t.type==="income") overallIn+=t.amount; else overallOut+=t.amount; });
+    document.getElementById("overallIn").textContent = formatMoney(overallIn);
+    document.getElementById("overallOut").textContent = formatMoney(overallOut);
+
     var t0 = todayISO();
     var todays = all.filter(function(t){ return t.date === t0; });
     var inc=0, exp=0;
@@ -861,9 +878,6 @@
     } else {
       todays.forEach(function(t){ list.appendChild(entryRow(t)); });
     }
-
-    // The production tracker never displays demo/sample data.
-    document.getElementById("exampleBanner").hidden = true;
   }
 
   function entryRow(t){
@@ -878,7 +892,8 @@
       '</div>' +
       '<div class="amt '+t.type+'">'+(t.type==="income"?"+":"−")+formatMoney(t.amount).replace(/^\D*/,"")+'</div>' +
       '<button class="del" type="button" aria-label="Delete entry">×</button>';
-    row.querySelector(".del").addEventListener("click", function(){
+    row.querySelector(".del").addEventListener("click", function(e){
+      e.stopPropagation();
       showConfirm("Delete this entry?", "Delete").then(function(ok){
         if (!ok) return;
         state.tx = state.tx.filter(function(x){ return x.id !== t.id; });
@@ -886,6 +901,7 @@
         renderToday(); renderHistory();
       });
     });
+    row.addEventListener("click", function(){ openSheet(t); });
     return row;
   }
 
@@ -928,13 +944,29 @@
   // ---------- analytics ----------
   var currentRange = "30";
   var currentDonutType = "expense";
+  var monthFromEl = document.getElementById("monthFrom");
+  var monthToEl = document.getElementById("monthTo");
+
+  function monthNowISO(){ return todayISO().slice(0,7); }
 
   document.getElementById("rangePills").addEventListener("click", function(e){
     var btn = e.target.closest("button[data-range]");
     if (!btn) return;
     currentRange = btn.dataset.range;
     document.querySelectorAll("#rangePills button").forEach(function(b){ b.classList.toggle("active", b===btn); });
+    document.getElementById("monthRangeRow").hidden = (currentRange !== "month");
+    if (currentRange === "month"){
+      if (!monthFromEl.value) monthFromEl.value = monthNowISO();
+      if (!monthToEl.value) monthToEl.value = monthFromEl.value;
+    }
     renderAnalytics();
+  });
+  [monthFromEl, monthToEl].forEach(function(el){
+    el.addEventListener("change", function(){
+      if (!monthFromEl.value) return;
+      if (!monthToEl.value || monthToEl.value < monthFromEl.value) monthToEl.value = monthFromEl.value;
+      renderAnalytics();
+    });
   });
   document.querySelector(".donut-toggle").addEventListener("click", function(e){
     var btn = e.target.closest("button[data-donut]");
@@ -945,6 +977,9 @@
   });
 
   function rangeStartISO(){
+    if (currentRange === "month"){
+      return (monthFromEl.value || monthNowISO()) + "-01";
+    }
     if (currentRange === "all"){
       var all = state.tx;
       if (!all.length) return todayISO();
@@ -953,10 +988,20 @@
     return daysAgoISO(parseInt(currentRange,10)-1);
   }
 
+  function rangeEndISO(){
+    if (currentRange === "month"){
+      var toMonth = monthToEl.value || monthFromEl.value || monthNowISO();
+      var d = new Date(toMonth + "-01T00:00:00");
+      d.setMonth(d.getMonth()+1); d.setDate(0);
+      return d.toISOString().slice(0,10);
+    }
+    return todayISO();
+  }
+
   function renderAnalytics(){
     var all = state.tx.slice().sort(function(a,b){ return a.date.localeCompare(b.date) || a.createdAt-b.createdAt; });
     var start = rangeStartISO();
-    var end = todayISO();
+    var end = rangeEndISO();
     var inRange = all.filter(function(t){ return t.date >= start && t.date <= end; });
 
     var inc=0, exp=0;
@@ -967,9 +1012,29 @@
     document.getElementById("mNet").textContent = formatMoney(inc-exp);
     document.getElementById("mAvg").textContent = formatMoney((inc-exp)/dayCount);
 
-    try { renderBalanceChart(all, start, end); } catch(e){ document.getElementById("balChartWrap").innerHTML=""; }
-    try { renderBarChart(inRange, start, end, dayCount); } catch(e){ document.getElementById("barChartWrap").innerHTML=""; }
-    try { renderDonut(inRange); } catch(e){ document.getElementById("donutWrap").innerHTML=""; document.getElementById("donutLegend").innerHTML=""; }
+    if (!state.tx.length){
+      document.getElementById("balChartWrap").innerHTML = '<div class="empty-state">Log your first entry to see this chart.</div>';
+      document.getElementById("barChartWrap").innerHTML = '<div class="empty-state">Log your first entry to see this chart.</div>';
+      document.getElementById("donutWrap").innerHTML = "";
+      document.getElementById("donutLegend").innerHTML = '<div class="empty-state">Log your first entry to see this chart.</div>';
+      document.getElementById("balSub").textContent = "";
+      document.getElementById("barSub").textContent = "";
+      return;
+    }
+
+    try { renderBalanceChart(all, start, end); } catch(e){
+      console.error("Daybook: balance chart failed", e);
+      document.getElementById("balChartWrap").innerHTML = '<div class="empty-state">Couldn’t draw this chart.</div>';
+    }
+    try { renderBarChart(inRange, start, end, dayCount); } catch(e){
+      console.error("Daybook: bar chart failed", e);
+      document.getElementById("barChartWrap").innerHTML = '<div class="empty-state">Couldn’t draw this chart.</div>';
+    }
+    try { renderDonut(inRange); } catch(e){
+      console.error("Daybook: donut chart failed", e);
+      document.getElementById("donutWrap").innerHTML = "";
+      document.getElementById("donutLegend").innerHTML = '<div class="empty-state">Couldn’t draw this chart.</div>';
+    }
 
     document.getElementById("balSub").textContent = formatShort(start) + " – " + formatShort(end);
     document.getElementById("barSub").textContent = dayCount <= 31 ? "By day" : (dayCount <= 92 ? "By week" : "By month");
@@ -1248,42 +1313,47 @@
            " L "+x0i+" "+y0i+" A "+rInner+" "+rInner+" 0 "+large+" 0 "+x1i+" "+y1i+" Z";
   }
 
-  // ---------- add sheet ----------
+  // ---------- add / edit sheet ----------
   var sheetOverlay = document.getElementById("sheetOverlay");
   var currentType = "expense";
+  var editingId = null;
 
-  function openSheet(){
-    document.getElementById("dateInput").value = todayISO();
+  function openSheet(entry){
+    editingId = entry ? entry.id : null;
+    document.getElementById("sheetTitle").textContent = entry ? "Edit entry" : "New entry";
+    document.getElementById("saveEntry").textContent = entry ? "Save changes" : "Save entry";
+    document.getElementById("dateInput").value = entry ? entry.date : todayISO();
     document.getElementById("dateInput").max = todayISO();
-    document.getElementById("amountInput").value = "";
-    document.getElementById("noteInput").value = "";
-    setType("expense");
+    document.getElementById("amountInput").value = entry ? entry.amount : "";
+    document.getElementById("noteInput").value = entry ? (entry.note || "") : "";
+    setType(entry ? entry.type : "expense", entry ? entry.category : null);
     sheetOverlay.hidden = false;
     setTimeout(function(){ document.getElementById("amountInput").focus(); }, 50);
   }
-  function closeSheet(){ sheetOverlay.hidden = true; }
+  function closeSheet(){ sheetOverlay.hidden = true; editingId = null; }
 
-  document.querySelectorAll("[data-open-sheet]").forEach(function(b){ b.addEventListener("click", openSheet); });
+  document.querySelectorAll("[data-open-sheet]").forEach(function(b){ b.addEventListener("click", function(){ openSheet(); }); });
   document.getElementById("cancelSheet").addEventListener("click", closeSheet);
   sheetOverlay.addEventListener("click", function(e){ if (e.target === sheetOverlay) closeSheet(); });
 
-  function setType(type){
+  function setType(type, preferredCatId){
     currentType = type;
     document.querySelectorAll(".type-toggle button").forEach(function(b){
       b.classList.toggle("active", b.dataset.type === type);
     });
-    renderChips();
+    renderChips(preferredCatId);
   }
   document.querySelectorAll(".type-toggle button").forEach(function(b){
     b.addEventListener("click", function(){ setType(b.dataset.type); });
   });
 
   var selectedCat = null;
-  function renderChips(){
+  function renderChips(preferredCatId){
     var row = document.getElementById("categoryChips");
     row.innerHTML = "";
     var list = catList(currentType);
-    selectedCat = list[0].id;
+    var hasPreferred = preferredCatId && list.some(function(c){ return c.id === preferredCatId; });
+    selectedCat = hasPreferred ? preferredCatId : list[0].id;
     list.forEach(function(cat, idx){
       var chip = document.createElement("button");
       chip.type = "button";
@@ -1304,14 +1374,27 @@
     if (!amt || amt <= 0){ shake("amountInput"); return; }
     var date = document.getElementById("dateInput").value || todayISO();
     var note = document.getElementById("noteInput").value.trim();
-    state.tx.push({
-      id: uid(), type: currentType, category: selectedCat, amount: Math.round(amt*100)/100,
-      date: date, note: note, example:false, createdAt: Date.now()
-    });
+    var wasEdit = !!editingId;
+    if (wasEdit){
+      var existing = state.tx.filter(function(x){ return x.id === editingId; })[0];
+      if (existing){
+        existing.type = currentType;
+        existing.category = selectedCat;
+        existing.amount = Math.round(amt*100)/100;
+        existing.date = date;
+        existing.note = note;
+        existing.example = false;
+      }
+    } else {
+      state.tx.push({
+        id: uid(), type: currentType, category: selectedCat, amount: Math.round(amt*100)/100,
+        date: date, note: note, example:false, createdAt: Date.now()
+      });
+    }
     save();
     closeSheet();
     renderToday(); renderHistory();
-    showToast((currentType==="income"?"Income":"Expense") + " logged");
+    showToast(wasEdit ? "Entry updated" : ((currentType==="income"?"Income":"Expense") + " logged"));
   });
 
   function shake(id){
@@ -1389,13 +1472,6 @@
       document.getElementById("sheetCur").textContent = v;
       renderToday();
     }
-  });
-
-  document.getElementById("clearExamplesBtn").addEventListener("click", function(){
-    state.tx = state.tx.filter(function(t){ return !t.example; });
-    save();
-    renderToday(); renderHistory();
-    showToast("Sample data cleared");
   });
 
   document.getElementById("clearAllBtn").addEventListener("click", function(){
