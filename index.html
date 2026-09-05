@@ -381,10 +381,10 @@
             <div class="t-label">Overall out</div>
             <div class="t-value mono" id="overallOut">$0.00</div>
           </div>
-          <div class="stat-tile">
+          <button type="button" class="stat-tile" id="creditDueTile" style="text-align:left; width:100%;">
             <div class="t-label">Credit due</div>
             <div class="t-value mono" id="creditDue" style="color:var(--warning);">$0.00</div>
-          </div>
+          </button>
         </div>
       </div>
 
@@ -541,6 +541,10 @@
           <button type="button" data-payment="credit">Credit</button>
         </div>
       </div>
+      <div class="field" id="payerField" hidden>
+        <label>Customer</label>
+        <input class="text-input" id="payerInput" type="text" placeholder="Who owes you?" maxlength="60">
+      </div>
       <div class="field">
         <label>Amount</label>
         <div class="amount-input">
@@ -576,6 +580,18 @@
       <div class="sheet-actions">
         <button class="btn" type="button" id="confirmCancelBtn">Cancel</button>
         <button class="btn primary" type="button" id="confirmOkBtn">OK</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="overlay" id="creditAccountsOverlay" hidden>
+    <div class="sheet">
+      <div class="sheet-handle"></div>
+      <h2>Who owes you</h2>
+      <div class="sub" style="font-size:12.5px; color:var(--ink-muted); margin:-8px 0 14px;">Unpaid credit sales, grouped by customer</div>
+      <div class="cat-legend" id="creditAccountsList" style="margin-top:0;"></div>
+      <div class="sheet-actions">
+        <button class="btn primary" type="button" id="closeCreditAccounts" style="flex:1;">Close</button>
       </div>
     </div>
   </div>
@@ -769,16 +785,28 @@
       // Preserve real user entries, but permanently remove the old demo/sample rows.
       state.tx = chosen.transactions.filter(function(t){ return t && !t.example; });
       state.settings = chosen.settings || {currency:"$"};
+      // Mirror whichever copy won to both stores, completing migration/recovery.
+      var fresh = snapshot();
+      persistLocal(fresh);
+      writeIDBSnapshot(fresh).catch(function(){});
     } else {
-      // Daybook is an expense tracker: a brand-new ledger always starts at zero.
+      // Neither store gave back a valid snapshot. That's normal for a brand-new
+      // ledger — but if raw bytes exist under the old keys and just failed to
+      // parse/validate (a transient read glitch, a corrupt write, anything),
+      // treating this as "empty" and then persisting that empty snapshot would
+      // permanently destroy real data. So: never write anything back here.
+      // Show an empty view and leave whatever is on disk completely alone.
       state.tx = [];
       state.settings = {currency:"$"};
+      var rawExisting = null;
+      try { rawExisting = localStorage.getItem(APP_STATE_KEY) || localStorage.getItem(STORE_KEY); } catch(e){}
+      if (!rawExisting){
+        // Genuinely nothing there — safe to initialize both stores.
+        var fresh2 = snapshot();
+        persistLocal(fresh2);
+        writeIDBSnapshot(fresh2).catch(function(){});
+      }
     }
-
-    // Mirror whichever copy won to both stores, completing migration/recovery.
-    var fresh = snapshot();
-    persistLocal(fresh);
-    writeIDBSnapshot(fresh).catch(function(){});
     requestDurableStorage();
   }
 
@@ -932,13 +960,60 @@
     }
   }
 
+  // ---------- credit accounts (who owes you) ----------
+  function renderCreditAccounts(){
+    var listEl = document.getElementById("creditAccountsList");
+    listEl.innerHTML = "";
+
+    var accounts = {};
+    var order = [];
+    state.tx.filter(function(t){ return t.type==="income" && t.paymentMethod==="credit" && !t.paid; })
+      .forEach(function(t){
+        var raw = (t.payer || "").trim();
+        var key = raw ? raw.toLowerCase() : "unnamed";
+        if (!accounts[key]){
+          accounts[key] = {name: raw || "No name", total: 0, count: 0};
+          order.push(key);
+        }
+        accounts[key].total += t.amount;
+        accounts[key].count += 1;
+      });
+
+    if (!order.length){
+      listEl.innerHTML = '<div class="empty-state">Nobody owes you right now.</div>';
+      return;
+    }
+
+    order.sort(function(a,b){ return accounts[b].total - accounts[a].total; });
+    order.forEach(function(key){
+      var acc = accounts[key];
+      var row = document.createElement("div");
+      row.className = "row";
+      row.innerHTML =
+        '<span class="name">'+escapeHtml(acc.name)+' <span style="color:var(--ink-muted); font-size:12px;">· '+acc.count+(acc.count===1?" sale":" sales")+'</span></span>' +
+        '<span class="amt mono">'+formatMoney(acc.total)+'</span>';
+      listEl.appendChild(row);
+    });
+  }
+  document.getElementById("creditDueTile").addEventListener("click", function(){
+    renderCreditAccounts();
+    document.getElementById("creditAccountsOverlay").hidden = false;
+  });
+  document.getElementById("closeCreditAccounts").addEventListener("click", function(){
+    document.getElementById("creditAccountsOverlay").hidden = true;
+  });
+  document.getElementById("creditAccountsOverlay").addEventListener("click", function(e){
+    if (e.target === document.getElementById("creditAccountsOverlay")) document.getElementById("creditAccountsOverlay").hidden = true;
+  });
+
   function entryRow(t){
     var row = document.createElement("div");
     row.className = "entry";
     var color = catColor(catIndex(t.type, t.category));
     var isCredit = t.type === "income" && t.paymentMethod === "credit";
+    var creditLabel = (t.payer ? escapeHtml(t.payer) : "Credit") + " · " + (t.paid ? "Paid" : "Unpaid");
     var creditBadge = isCredit
-      ? '<button type="button" class="credit-badge '+(t.paid ? "paid" : "unpaid")+'">'+(t.paid ? "Credit · Paid" : "Credit · Unpaid")+'</button>'
+      ? '<button type="button" class="credit-badge '+(t.paid ? "paid" : "unpaid")+'">'+creditLabel+'</button>'
       : "";
     row.innerHTML =
       '<span class="swatch" style="background:'+color+'"></span>' +
@@ -1461,6 +1536,7 @@
     document.getElementById("dateInput").max = todayISO();
     document.getElementById("amountInput").value = entry ? entry.amount : "";
     document.getElementById("noteInput").value = entry ? (entry.note || "") : "";
+    document.getElementById("payerInput").value = entry ? (entry.payer || "") : "";
     setType(entry ? entry.type : "expense", entry ? entry.category : null);
     setPayment(entry && entry.paymentMethod === "credit" ? "credit" : "cash");
     sheetOverlay.hidden = false;
@@ -1472,12 +1548,17 @@
   document.getElementById("cancelSheet").addEventListener("click", closeSheet);
   sheetOverlay.addEventListener("click", function(e){ if (e.target === sheetOverlay) closeSheet(); });
 
+  function updatePayerVisibility(){
+    document.getElementById("payerField").hidden = !(currentType === "income" && currentPayment === "credit");
+  }
+
   function setType(type, preferredCatId){
     currentType = type;
     document.querySelectorAll(".type-toggle button[data-type]").forEach(function(b){
       b.classList.toggle("active", b.dataset.type === type);
     });
     document.getElementById("paymentMethodField").hidden = (type !== "income");
+    updatePayerVisibility();
     renderChips(preferredCatId);
   }
   document.querySelectorAll(".type-toggle button[data-type]").forEach(function(b){
@@ -1489,6 +1570,7 @@
     document.querySelectorAll("#paymentToggle button[data-payment]").forEach(function(b){
       b.classList.toggle("active", b.dataset.payment === method);
     });
+    updatePayerVisibility();
   }
   document.querySelectorAll("#paymentToggle button[data-payment]").forEach(function(b){
     b.addEventListener("click", function(){ setPayment(b.dataset.payment); });
@@ -1523,6 +1605,7 @@
     var note = document.getElementById("noteInput").value.trim();
     var wasEdit = !!editingId;
     var paymentMethod = currentType === "income" ? currentPayment : undefined;
+    var payer = paymentMethod === "credit" ? document.getElementById("payerInput").value.trim() : undefined;
     if (wasEdit){
       var existing = state.tx.filter(function(x){ return x.id === editingId; })[0];
       if (existing){
@@ -1535,12 +1618,13 @@
         existing.example = false;
         existing.paymentMethod = paymentMethod;
         existing.paid = paymentMethod === "credit" ? keepPaid : undefined;
+        existing.payer = payer;
       }
     } else {
       state.tx.push({
         id: uid(), type: currentType, category: selectedCat, amount: Math.round(amt*100)/100,
         date: date, note: note, example:false, createdAt: Date.now(),
-        paymentMethod: paymentMethod, paid: paymentMethod === "credit" ? false : undefined
+        paymentMethod: paymentMethod, paid: paymentMethod === "credit" ? false : undefined, payer: payer
       });
     }
     save();
