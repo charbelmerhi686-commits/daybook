@@ -243,9 +243,9 @@
   }
   .range-pills button.active{ background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
 
-  .month-range{ display:flex; align-items:center; gap:10px; margin-top:10px; }
-  .month-range .text-input{ flex:1; padding:9px 11px; font-size:13.5px; }
-  .month-range span{ font-size:12.5px; color:var(--ink-muted); flex:none; }
+  .custom-range{ display:flex; align-items:center; gap:10px; margin-top:10px; }
+  .custom-range .text-input{ flex:1; padding:9px 11px; font-size:13.5px; }
+  .custom-range span{ font-size:12.5px; color:var(--ink-muted); flex:none; }
 
   .metric-grid{ display:grid; grid-template-columns:1fr 1fr; gap:10px; }
   .metric-card{ background: var(--surface-raised); border:1px solid var(--border); border-radius:14px; padding:12px 14px; }
@@ -378,8 +378,8 @@
             <div class="t-value mono" id="overallIn">$0.00</div>
           </div>
           <div class="stat-tile expense">
-            <div class="t-label">Overall out</div>
-            <div class="t-value mono" id="overallOut">$0.00</div>
+            <div class="t-label">Expenses this month</div>
+            <div class="t-value mono" id="monthExpense">$0.00</div>
           </div>
           <button type="button" class="stat-tile" id="creditDueTile" style="text-align:left; width:100%;">
             <div class="t-label">Credit due</div>
@@ -411,13 +411,13 @@
         <button data-range="30" type="button" class="active">30D</button>
         <button data-range="90" type="button">90D</button>
         <button data-range="all" type="button">All</button>
-        <button data-range="month" type="button">Month</button>
+        <button data-range="custom" type="button">Custom</button>
       </div>
 
-      <div class="month-range" id="monthRangeRow" hidden>
-        <input class="text-input" id="monthFrom" type="month">
+      <div class="custom-range" id="customRangeRow" hidden>
+        <input class="text-input" id="customFrom" type="date">
         <span>to</span>
-        <input class="text-input" id="monthTo" type="month">
+        <input class="text-input" id="customTo" type="date">
       </div>
 
       <div class="metric-grid">
@@ -544,6 +544,7 @@
       <div class="field" id="payerField" hidden>
         <label>Customer</label>
         <input class="text-input" id="payerInput" type="text" placeholder="Who owes you?" maxlength="60">
+        <div class="chip-row" id="payerSuggestions" style="margin-top:9px;"></div>
       </div>
       <div class="field">
         <label>Amount</label>
@@ -931,15 +932,18 @@
       ? "Across " + all.length + " " + (all.length===1?"entry":"entries")
       : "No entries yet";
 
-    var overallIn=0, overallOut=0, creditDue=0;
+    var overallIn=0, monthExpense=0, creditDue=0;
+    var monthStart = todayISO().slice(0,7) + "-01";
     all.forEach(function(t){
       if (t.type==="income"){
         overallIn+=t.amount;
         if (t.paymentMethod==="credit" && !t.paid) creditDue+=t.amount;
-      } else overallOut+=t.amount;
+      } else if (t.date >= monthStart){
+        monthExpense+=t.amount;
+      }
     });
     document.getElementById("overallIn").textContent = formatMoney(overallIn);
-    document.getElementById("overallOut").textContent = formatMoney(overallOut);
+    document.getElementById("monthExpense").textContent = formatMoney(monthExpense);
     document.getElementById("creditDue").textContent = formatMoney(creditDue);
 
     var t0 = todayISO();
@@ -1085,27 +1089,27 @@
   // ---------- analytics ----------
   var currentRange = "30";
   var currentDonutType = "expense";
-  var monthFromEl = document.getElementById("monthFrom");
-  var monthToEl = document.getElementById("monthTo");
-
-  function monthNowISO(){ return todayISO().slice(0,7); }
+  var customFromEl = document.getElementById("customFrom");
+  var customToEl = document.getElementById("customTo");
 
   document.getElementById("rangePills").addEventListener("click", function(e){
     var btn = e.target.closest("button[data-range]");
     if (!btn) return;
     currentRange = btn.dataset.range;
     document.querySelectorAll("#rangePills button").forEach(function(b){ b.classList.toggle("active", b===btn); });
-    document.getElementById("monthRangeRow").hidden = (currentRange !== "month");
-    if (currentRange === "month"){
-      if (!monthFromEl.value) monthFromEl.value = monthNowISO();
-      if (!monthToEl.value) monthToEl.value = monthFromEl.value;
+    document.getElementById("customRangeRow").hidden = (currentRange !== "custom");
+    if (currentRange === "custom"){
+      customFromEl.max = todayISO();
+      customToEl.max = todayISO();
+      if (!customFromEl.value) customFromEl.value = todayISO();
+      if (!customToEl.value) customToEl.value = customFromEl.value;
     }
     renderAnalytics();
   });
-  [monthFromEl, monthToEl].forEach(function(el){
+  [customFromEl, customToEl].forEach(function(el){
     el.addEventListener("change", function(){
-      if (!monthFromEl.value) return;
-      if (!monthToEl.value || monthToEl.value < monthFromEl.value) monthToEl.value = monthFromEl.value;
+      if (!customFromEl.value) return;
+      if (!customToEl.value || customToEl.value < customFromEl.value) customToEl.value = customFromEl.value;
       renderAnalytics();
     });
   });
@@ -1118,8 +1122,8 @@
   });
 
   function rangeStartISO(){
-    if (currentRange === "month"){
-      return (monthFromEl.value || monthNowISO()) + "-01";
+    if (currentRange === "custom"){
+      return customFromEl.value || todayISO();
     }
     if (currentRange === "all"){
       var all = state.tx;
@@ -1130,11 +1134,8 @@
   }
 
   function rangeEndISO(){
-    if (currentRange === "month"){
-      var toMonth = monthToEl.value || monthFromEl.value || monthNowISO();
-      var d = new Date(toMonth + "-01T00:00:00");
-      d.setMonth(d.getMonth()+1); d.setDate(0);
-      return toISODate(d);
+    if (currentRange === "custom"){
+      return customToEl.value || customFromEl.value || todayISO();
     }
     return todayISO();
   }
@@ -1549,8 +1550,42 @@
   document.getElementById("cancelSheet").addEventListener("click", closeSheet);
   sheetOverlay.addEventListener("click", function(e){ if (e.target === sheetOverlay) closeSheet(); });
 
+  function knownPayers(){
+    var seen = {};
+    var names = [];
+    state.tx.slice()
+      .sort(function(a,b){ return (b.createdAt||0) - (a.createdAt||0); })
+      .forEach(function(t){
+        if (t.type !== "income" || t.paymentMethod !== "credit") return;
+        var raw = (t.payer || t.note || "").trim();
+        if (!raw) return;
+        var key = raw.toLowerCase();
+        if (seen[key]) return;
+        seen[key] = true;
+        names.push(raw);
+      });
+    return names;
+  }
+
+  function renderPayerSuggestions(){
+    var row = document.getElementById("payerSuggestions");
+    row.innerHTML = "";
+    knownPayers().slice(0, 12).forEach(function(name){
+      var chip = document.createElement("button");
+      chip.type = "button";
+      chip.className = "chip";
+      chip.textContent = name;
+      chip.addEventListener("click", function(){
+        document.getElementById("payerInput").value = name;
+      });
+      row.appendChild(chip);
+    });
+  }
+
   function updatePayerVisibility(){
-    document.getElementById("payerField").hidden = !(currentType === "income" && currentPayment === "credit");
+    var show = currentType === "income" && currentPayment === "credit";
+    document.getElementById("payerField").hidden = !show;
+    if (show) renderPayerSuggestions();
   }
 
   function setType(type, preferredCatId){
