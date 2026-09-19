@@ -287,16 +287,22 @@
   .cat-legend .pct{ color:var(--ink-muted); font-size:12px; width:38px; text-align:right; }
   .cat-legend .amt{ font-weight:600; width:74px; text-align:right; }
 
-  .credit-account-row{ padding:12px 2px; border-bottom:1px solid var(--border); }
-  .credit-account-row:last-child{ border-bottom:none; }
-  .credit-account-row .car-top{ display:flex; justify-content:space-between; align-items:baseline; gap:10px; }
-  .credit-account-row .car-name{ font-size:14px; font-weight:600; color:var(--ink); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-  .credit-account-row .car-amt{ font-size:15px; font-weight:700; color:var(--warning); flex:none; }
-  .credit-account-row .car-bottom{ display:flex; justify-content:space-between; align-items:center; gap:10px; margin-top:6px; }
-  .credit-account-row .car-count{ font-size:12px; color:var(--ink-muted); }
-  .credit-account-row .car-pay-btn{
-    border:1px solid var(--border-strong); background:var(--income-soft); color:var(--income);
-    font-size:12px; font-weight:700; padding:5px 12px; border-radius:999px; flex:none;
+  .credit-account-group{ padding:12px 2px; border-bottom:1px solid var(--border); }
+  .credit-account-group:last-child{ border-bottom:none; }
+  .cag-header{ display:flex; justify-content:space-between; align-items:baseline; gap:10px; }
+  .cag-name{ font-size:14px; font-weight:700; color:var(--ink); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .cag-total{ font-size:15px; font-weight:700; color:var(--warning); flex:none; }
+  .cag-markall{
+    margin-top:8px; border:1px solid var(--border-strong); background:var(--income-soft); color:var(--income);
+    font-size:12px; font-weight:700; padding:6px 12px; border-radius:999px;
+  }
+  .cag-invoices{ margin-top:8px; display:flex; flex-direction:column; gap:6px; }
+  .cag-invoice{ display:flex; align-items:center; gap:10px; padding:7px 10px; background:var(--surface-2); border-radius:10px; }
+  .cag-inv-date{ font-size:12px; color:var(--ink-muted); flex:1; }
+  .cag-inv-amt{ font-size:13px; font-weight:600; color:var(--ink); flex:none; }
+  .cag-inv-pay{
+    border:1px solid var(--border-strong); background:var(--surface-raised); color:var(--income);
+    font-size:11px; font-weight:700; padding:4px 10px; border-radius:999px; flex:none;
   }
   .donut-toggle{ display:flex; gap:6px; }
   .donut-toggle button{ border:1px solid var(--border-strong); background:var(--surface-2); color:var(--ink-2); font-size:12px; font-weight:600; padding:4px 10px; border-radius:999px; }
@@ -452,6 +458,11 @@
         <span class="plus">+</span> Log income or an expense
       </button>
 
+      <div id="paidTodaySection" hidden>
+        <div class="section-head"><h2>Payments received today</h2></div>
+        <div class="entry-list" id="paidTodayList"></div>
+      </div>
+
       <div>
         <div class="section-head"><h2>Today's entries</h2><span class="meta" id="todayDateLabel"></span></div>
         <div class="entry-list" id="todayList"></div>
@@ -505,7 +516,7 @@
 
       <div class="chart-card">
         <div class="section-head" style="margin-bottom:8px;">
-          <h3 style="margin:0;">By category</h3>
+          <h3 style="margin:0;" id="donutTitle">By category</h3>
           <div class="donut-toggle">
             <button data-donut="expense" class="active" type="button">Expenses</button>
             <button data-donut="income" type="button">Income</button>
@@ -560,7 +571,7 @@
           <button class="btn danger" id="clearAllBtn" type="button">Clear all data</button>
         </div>
       </div>
-      <p class="about">Daybook saves every entry on this device using IndexedDB with a localStorage mirror.<br>Nothing is sent anywhere, ever.</p>
+      <p class="about">Daybook saves every entry on this device using IndexedDB with a localStorage mirror.<br>Nothing is sent anywhere, ever.<br>Build 2026-09-19-1</p>
     </section>
 
   </main>
@@ -651,7 +662,7 @@
     <div class="sheet sheet-scrollable">
       <div class="sheet-handle"></div>
       <h2 class="tight">Who owes you</h2>
-      <div class="sheet-sub">Tap "Mark paid" to settle everything a customer currently owes.</div>
+      <div class="sheet-sub">Mark one sale paid, or a customer's whole balance at once.</div>
       <div class="sheet-scroll-area" id="creditAccountsList"></div>
       <div class="sheet-actions">
         <button class="btn primary" type="button" id="closeCreditAccounts" style="flex:1;">Close</button>
@@ -686,9 +697,7 @@
     {id:"other", label:"Other"}
   ];
   var INCOME_CATS = [
-    {id:"salary", label:"Salary"},
-    {id:"freelance", label:"Freelance"},
-    {id:"gift", label:"Gift"},
+    {id:"distribution", label:"Distribution"},
     {id:"investment", label:"Investment"},
     {id:"other", label:"Other"}
   ];
@@ -1033,6 +1042,32 @@
     } else {
       todays.forEach(function(t){ list.appendChild(entryRow(t)); });
     }
+
+    // Visible proof a credit payment actually landed today, separate from
+    // when it was originally sold — this is the number that just moved.
+    var paidToday = all.filter(function(t){
+      return t.type==="income" && t.paymentMethod==="credit" && t.paid && t.paidDate === t0;
+    });
+    var paidSection = document.getElementById("paidTodaySection");
+    var paidList = document.getElementById("paidTodayList");
+    if (paidToday.length){
+      paidSection.hidden = false;
+      paidList.innerHTML = "";
+      paidToday.forEach(function(t){
+        var row = document.createElement("div");
+        row.className = "entry";
+        row.innerHTML =
+          '<span class="swatch" style="background:var(--income)"></span>' +
+          '<div class="body">' +
+            '<div class="cat">'+escapeHtml(payerNameOf(t) || "Payment received")+'</div>' +
+            '<div class="note">Sold '+formatShort(t.date)+'</div>' +
+          '</div>' +
+          '<div class="amt income">+'+formatMoney(t.amount).replace(/^\D*/,"")+'</div>';
+        paidList.appendChild(row);
+      });
+    } else {
+      paidSection.hidden = true;
+    }
   }
 
   // ---------- credit accounts (who owes you) ----------
@@ -1040,50 +1075,79 @@
     var listEl = document.getElementById("creditAccountsList");
     listEl.innerHTML = "";
 
+    // Only ever-unpaid entries land here to begin with, so an already-paid
+    // invoice from this same customer is never touched by anything below —
+    // marking one invoice (or "all") only ever affects what's still owed.
     var accounts = {};
     var order = [];
-    state.tx.filter(function(t){ return t.type==="income" && t.paymentMethod==="credit" && !t.paid; })
-      .forEach(function(t){
-        var raw = payerNameOf(t);
-        var key = raw ? raw.toLowerCase() : "unnamed";
-        if (!accounts[key]){
-          accounts[key] = {name: raw || "No name", total: 0, count: 0};
-          order.push(key);
-        }
-        accounts[key].total += t.amount;
-        accounts[key].count += 1;
-      });
+    state.tx.forEach(function(t){
+      if (!(t.type==="income" && t.paymentMethod==="credit" && !t.paid)) return;
+      var raw = payerNameOf(t);
+      var key = raw ? raw.toLowerCase() : "unnamed";
+      if (!accounts[key]){ accounts[key] = {name: raw || "No name", total: 0, items: []}; order.push(key); }
+      accounts[key].total += t.amount;
+      accounts[key].items.push(t);
+    });
 
     if (!order.length){
       listEl.innerHTML = '<div class="empty-state">Nobody owes you right now.</div>';
       return;
     }
 
+    function markPaidNow(items){
+      var today = todayISO();
+      items.forEach(function(t){ t.paid = true; t.paidDate = today; });
+      save();
+      renderToday(); renderHistory();
+      renderCreditAccounts();
+      showToast(items.length === 1 ? "Marked paid" : "Marked " + items.length + " sales paid");
+    }
+
     order.sort(function(a,b){ return accounts[b].total - accounts[a].total; });
     order.forEach(function(key){
       var acc = accounts[key];
-      var row = document.createElement("div");
-      row.className = "credit-account-row";
-      row.innerHTML =
-        '<div class="car-top"><span class="car-name">'+escapeHtml(acc.name)+'</span><span class="car-amt mono">'+formatMoney(acc.total)+'</span></div>' +
-        '<div class="car-bottom"><span class="car-count">'+acc.count+(acc.count===1?" sale":" sales")+'</span><button type="button" class="car-pay-btn">Mark paid</button></div>';
-      row.querySelector(".car-pay-btn").addEventListener("click", function(){
-        var msg = "Mark all "+acc.count+(acc.count===1?" sale":" sales")+" from "+acc.name+" as paid ("+formatMoney(acc.total)+")?";
-        showConfirm(msg, "Mark paid").then(function(ok){
-          if (!ok) return;
-          var today = todayISO();
-          state.tx.forEach(function(t){
-            if (!(t.type==="income" && t.paymentMethod==="credit" && !t.paid)) return;
-            var thisKey = (payerNameOf(t) || "").toLowerCase() || "unnamed";
-            if (thisKey === key){ t.paid = true; t.paidDate = today; }
-          });
-          save();
-          renderToday(); renderHistory();
-          renderCreditAccounts();
-          showToast("Marked paid");
+      acc.items.sort(function(a,b){ return a.date.localeCompare(b.date); });
+
+      var group = document.createElement("div");
+      group.className = "credit-account-group";
+
+      var header = document.createElement("div");
+      header.className = "cag-header";
+      header.innerHTML =
+        '<span class="cag-name">'+escapeHtml(acc.name)+'</span>' +
+        '<span class="cag-total mono">'+formatMoney(acc.total)+'</span>';
+      group.appendChild(header);
+
+      if (acc.items.length > 1){
+        var markAllBtn = document.createElement("button");
+        markAllBtn.type = "button";
+        markAllBtn.className = "cag-markall";
+        markAllBtn.textContent = "Mark all "+acc.items.length+" paid";
+        markAllBtn.addEventListener("click", function(){
+          var msg = "Mark all "+acc.items.length+" unpaid sales from "+acc.name+" as paid ("+formatMoney(acc.total)+")?";
+          showConfirm(msg, "Mark all paid").then(function(ok){ if (ok) markPaidNow(acc.items.slice()); });
         });
+        group.appendChild(markAllBtn);
+      }
+
+      var invoicesEl = document.createElement("div");
+      invoicesEl.className = "cag-invoices";
+      acc.items.forEach(function(t){
+        var row = document.createElement("div");
+        row.className = "cag-invoice";
+        row.innerHTML =
+          '<span class="cag-inv-date">'+formatShort(t.date)+'</span>' +
+          '<span class="cag-inv-amt mono">'+formatMoney(t.amount)+'</span>' +
+          '<button type="button" class="cag-inv-pay">Paid</button>';
+        row.querySelector(".cag-inv-pay").addEventListener("click", function(){
+          var msg = "Mark this "+formatMoney(t.amount)+" sale from "+acc.name+" ("+formatShort(t.date)+") as paid?";
+          showConfirm(msg, "Mark paid").then(function(ok){ if (ok) markPaidNow([t]); });
+        });
+        invoicesEl.appendChild(row);
       });
-      listEl.appendChild(row);
+      group.appendChild(invoicesEl);
+
+      listEl.appendChild(group);
     });
   }
   document.getElementById("creditDueTile").addEventListener("click", function(){
@@ -1547,13 +1611,9 @@
     wrap.innerHTML = ""; legend.innerHTML = "";
 
     var type = currentDonutType;
-    var list = catList(type);
-    var sums = {};
+    document.getElementById("donutTitle").textContent = type === "income" ? "By customer" : "By category";
     var total = 0;
-    inRange.filter(function(t){ return t.type===type; }).forEach(function(t){
-      sums[t.category] = (sums[t.category]||0) + t.amount;
-      total += t.amount;
-    });
+    inRange.filter(function(t){ return t.type===type; }).forEach(function(t){ total += t.amount; });
 
     var W=200,H=200,cx=100,cy=100,rOuter=88,rInner=54;
     var svg = svgEl("svg", {viewBox:"0 0 "+W+" "+H, width:"200", height:"200", style:"display:block;margin:0 auto;"});
@@ -1565,27 +1625,48 @@
       return;
     }
 
-    // "Other" entries are broken out by their note instead of lumped into one
-    // generic slice — a described "Other" reads as its own line, not a black box.
     var slices = [];
-    list.forEach(function(cat, idx){
-      var color = catColor(idx);
-      if (cat.id === "other"){
-        var groups = {}, order = [];
-        inRange.filter(function(t){ return t.type===type && t.category==="other"; }).forEach(function(t){
-          var label = (t.note || "").trim() || "Other";
-          var key = label.toLowerCase();
-          if (!groups[key]){ groups[key] = {label:label, value:0}; order.push(key); }
-          groups[key].value += t.amount;
-        });
-        order.forEach(function(key){
-          if (groups[key].value > 0) slices.push({label:groups[key].label, value:groups[key].value, color:color});
-        });
-      } else {
-        var val = sums[cat.id] || 0;
-        if (val > 0) slices.push({label:cat.label, value:val, color:color});
-      }
-    });
+    if (type === "income"){
+      // Income is grouped by who paid you, not by category — with only
+      // Distribution/Investment/Other, category tells you almost nothing;
+      // the customer is what actually varies.
+      var groups = {}, order = [];
+      inRange.filter(function(t){ return t.type==="income"; }).forEach(function(t){
+        var label = payerNameOf(t) || "Other";
+        var key = label.toLowerCase();
+        if (!groups[key]){ groups[key] = {label:label, value:0}; order.push(key); }
+        groups[key].value += t.amount;
+      });
+      order.forEach(function(key, idx){
+        if (groups[key].value > 0) slices.push({label:groups[key].label, value:groups[key].value, color:catColor(idx)});
+      });
+    } else {
+      // "Other" expenses are broken out by their note instead of lumped into
+      // one generic slice — a described "Other" reads as its own line.
+      var list = catList(type);
+      var sums = {};
+      inRange.filter(function(t){ return t.type===type; }).forEach(function(t){
+        sums[t.category] = (sums[t.category]||0) + t.amount;
+      });
+      list.forEach(function(cat, idx){
+        var color = catColor(idx);
+        if (cat.id === "other"){
+          var oGroups = {}, oOrder = [];
+          inRange.filter(function(t){ return t.type===type && t.category==="other"; }).forEach(function(t){
+            var label = (t.note || "").trim() || "Other";
+            var key = label.toLowerCase();
+            if (!oGroups[key]){ oGroups[key] = {label:label, value:0}; oOrder.push(key); }
+            oGroups[key].value += t.amount;
+          });
+          oOrder.forEach(function(key){
+            if (oGroups[key].value > 0) slices.push({label:oGroups[key].label, value:oGroups[key].value, color:color});
+          });
+        } else {
+          var val = sums[cat.id] || 0;
+          if (val > 0) slices.push({label:cat.label, value:val, color:color});
+        }
+      });
+    }
 
     var angle = -Math.PI/2;
     slices.forEach(function(slice){
@@ -1735,9 +1816,17 @@
     });
   }
 
+  function payerRequired(){
+    return currentType === "income" && (currentPayment === "credit" || selectedCat === "distribution");
+  }
+
   function updatePayerVisibility(){
-    var show = currentType === "income" && currentPayment === "credit";
+    var show = payerRequired();
     document.getElementById("payerField").hidden = !show;
+    var isCredit = currentPayment === "credit";
+    document.getElementById("payerField").querySelector("label").textContent =
+      isCredit ? "Customer" : "Customer (required for Distribution)";
+    document.getElementById("payerInput").placeholder = isCredit ? "Who owes you?" : "Who was this sold to?";
     if (show) renderPayerSuggestions();
   }
 
@@ -1747,8 +1836,8 @@
       b.classList.toggle("active", b.dataset.type === type);
     });
     document.getElementById("paymentMethodField").hidden = (type !== "income");
-    updatePayerVisibility();
     renderChips(preferredCatId);
+    updatePayerVisibility();
   }
   document.querySelectorAll(".type-toggle button[data-type]").forEach(function(b){
     b.addEventListener("click", function(){ setType(b.dataset.type); });
@@ -1779,6 +1868,7 @@
       chip.innerHTML = '<span class="dot" style="background:'+catColor(idx)+'"></span>'+cat.label;
       chip.addEventListener("click", function(){
         selectedCat = cat.id;
+        updatePayerVisibility();
         row.querySelectorAll(".chip").forEach(function(c){ c.classList.remove("active"); });
         chip.classList.add("active");
       });
@@ -1790,11 +1880,13 @@
     var amountEl = document.getElementById("amountInput");
     var amt = Number(amountEl.value);
     if (!amt || amt <= 0){ shake("amountInput"); return; }
+    var payerVal = document.getElementById("payerInput").value.trim();
+    if (payerRequired() && !payerVal){ shake("payerInput"); return; }
     var date = document.getElementById("dateInput").value || todayISO();
     var note = document.getElementById("noteInput").value.trim();
     var wasEdit = !!editingId;
     var paymentMethod = currentType === "income" ? currentPayment : undefined;
-    var payer = paymentMethod === "credit" ? document.getElementById("payerInput").value.trim() : undefined;
+    var payer = currentType === "income" ? payerVal : undefined;
     if (wasEdit){
       var existing = state.tx.filter(function(x){ return x.id === editingId; })[0];
       if (existing){
