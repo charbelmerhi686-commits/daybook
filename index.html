@@ -286,6 +286,18 @@
   .cat-legend .name{ flex:1; color:var(--ink); }
   .cat-legend .pct{ color:var(--ink-muted); font-size:12px; width:38px; text-align:right; }
   .cat-legend .amt{ font-weight:600; width:74px; text-align:right; }
+
+  .credit-account-row{ padding:12px 2px; border-bottom:1px solid var(--border); }
+  .credit-account-row:last-child{ border-bottom:none; }
+  .credit-account-row .car-top{ display:flex; justify-content:space-between; align-items:baseline; gap:10px; }
+  .credit-account-row .car-name{ font-size:14px; font-weight:600; color:var(--ink); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .credit-account-row .car-amt{ font-size:15px; font-weight:700; color:var(--warning); flex:none; }
+  .credit-account-row .car-bottom{ display:flex; justify-content:space-between; align-items:center; gap:10px; margin-top:6px; }
+  .credit-account-row .car-count{ font-size:12px; color:var(--ink-muted); }
+  .credit-account-row .car-pay-btn{
+    border:1px solid var(--border-strong); background:var(--income-soft); color:var(--income);
+    font-size:12px; font-weight:700; padding:5px 12px; border-radius:999px; flex:none;
+  }
   .donut-toggle{ display:flex; gap:6px; }
   .donut-toggle button{ border:1px solid var(--border-strong); background:var(--surface-2); color:var(--ink-2); font-size:12px; font-weight:600; padding:4px 10px; border-radius:999px; }
   .donut-toggle button.active{ background:var(--accent); border-color:var(--accent); color:var(--accent-ink); }
@@ -329,6 +341,10 @@
     border-radius: 22px 22px 0 0; padding: 14px 20px calc(env(safe-area-inset-bottom,0px) + 20px);
     max-height: 88dvh; overflow-y:auto; box-shadow: 0 -8px 30px rgba(0,0,0,0.25);
   }
+  /* Header and footer stay put; only the middle list scrolls, so it's never
+     ambiguous whether there's more to see below the fold. */
+  .sheet.sheet-scrollable{ display:flex; flex-direction:column; overflow-y:hidden; }
+  .sheet-scroll-area{ overflow-y:auto; flex:1; min-height:0; -webkit-overflow-scrolling:touch; }
   .sheet-handle{ width:36px; height:4px; border-radius:2px; background: var(--border-strong); margin: 0 auto 14px; }
   .sheet h2{ font-size:18px; margin:0 0 14px; }
   .sheet h2.tight{ margin-bottom:4px; }
@@ -632,11 +648,11 @@
   </div>
 
   <div class="overlay" id="creditAccountsOverlay" hidden>
-    <div class="sheet">
+    <div class="sheet sheet-scrollable">
       <div class="sheet-handle"></div>
       <h2 class="tight">Who owes you</h2>
-      <div class="sheet-sub">Unpaid credit sales, grouped by customer</div>
-      <div class="cat-legend" id="creditAccountsList" style="margin-top:0;"></div>
+      <div class="sheet-sub">Tap "Mark paid" to settle everything a customer currently owes.</div>
+      <div class="sheet-scroll-area" id="creditAccountsList"></div>
       <div class="sheet-actions">
         <button class="btn primary" type="button" id="closeCreditAccounts" style="flex:1;">Close</button>
       </div>
@@ -1047,10 +1063,26 @@
     order.forEach(function(key){
       var acc = accounts[key];
       var row = document.createElement("div");
-      row.className = "row";
+      row.className = "credit-account-row";
       row.innerHTML =
-        '<span class="name">'+escapeHtml(acc.name)+' <span style="color:var(--ink-muted); font-size:12px;">· '+acc.count+(acc.count===1?" sale":" sales")+'</span></span>' +
-        '<span class="amt mono">'+formatMoney(acc.total)+'</span>';
+        '<div class="car-top"><span class="car-name">'+escapeHtml(acc.name)+'</span><span class="car-amt mono">'+formatMoney(acc.total)+'</span></div>' +
+        '<div class="car-bottom"><span class="car-count">'+acc.count+(acc.count===1?" sale":" sales")+'</span><button type="button" class="car-pay-btn">Mark paid</button></div>';
+      row.querySelector(".car-pay-btn").addEventListener("click", function(){
+        var msg = "Mark all "+acc.count+(acc.count===1?" sale":" sales")+" from "+acc.name+" as paid ("+formatMoney(acc.total)+")?";
+        showConfirm(msg, "Mark paid").then(function(ok){
+          if (!ok) return;
+          var today = todayISO();
+          state.tx.forEach(function(t){
+            if (!(t.type==="income" && t.paymentMethod==="credit" && !t.paid)) return;
+            var thisKey = (payerNameOf(t) || "").toLowerCase() || "unnamed";
+            if (thisKey === key){ t.paid = true; t.paidDate = today; }
+          });
+          save();
+          renderToday(); renderHistory();
+          renderCreditAccounts();
+          showToast("Marked paid");
+        });
+      });
       listEl.appendChild(row);
     });
   }
