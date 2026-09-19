@@ -379,6 +379,12 @@
   .chip.active{ background: var(--accent-soft); border-color: var(--accent); color: var(--ink); }
   .text-input{ width:100%; border:1px solid var(--border-strong); background: var(--surface-2); border-radius:12px; padding:11px 13px; font-size:14.5px; }
   .text-input:focus{ outline:none; border-color: var(--accent); }
+  select.text-input{
+    -webkit-appearance:none; appearance:none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%238c8677' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+    background-repeat:no-repeat; background-position:right 13px center; background-size:16px;
+    padding-right:38px;
+  }
   .sheet-actions{ display:flex; gap:10px; margin-top:6px; }
   .sheet-actions .btn{ flex:1; }
 
@@ -571,7 +577,7 @@
           <button class="btn danger" id="clearAllBtn" type="button">Clear all data</button>
         </div>
       </div>
-      <p class="about">Daybook saves every entry on this device using IndexedDB with a localStorage mirror.<br>Nothing is sent anywhere, ever.<br>Build 2026-09-19-1</p>
+      <p class="about">Daybook saves every entry on this device using IndexedDB with a localStorage mirror.<br>Nothing is sent anywhere, ever.<br>Build 2026-09-19-2</p>
     </section>
 
   </main>
@@ -627,8 +633,8 @@
         </div>
         <div class="field" id="payerField" hidden>
           <label>Customer</label>
-          <input class="text-input" id="payerInput" type="text" placeholder="Who owes you?" maxlength="60">
-          <div class="chip-row" id="payerSuggestions" style="margin-top:9px;"></div>
+          <select class="text-input" id="payerSelect"></select>
+          <input class="text-input" id="payerInput" type="text" placeholder="Customer name" maxlength="60" style="margin-top:8px;">
         </div>
       </div>
       <div class="field">
@@ -1053,18 +1059,7 @@
     if (paidToday.length){
       paidSection.hidden = false;
       paidList.innerHTML = "";
-      paidToday.forEach(function(t){
-        var row = document.createElement("div");
-        row.className = "entry";
-        row.innerHTML =
-          '<span class="swatch" style="background:var(--income)"></span>' +
-          '<div class="body">' +
-            '<div class="cat">'+escapeHtml(payerNameOf(t) || "Payment received")+'</div>' +
-            '<div class="note">Sold '+formatShort(t.date)+'</div>' +
-          '</div>' +
-          '<div class="amt income">+'+formatMoney(t.amount).replace(/^\D*/,"")+'</div>';
-        paidList.appendChild(row);
-      });
+      paidToday.forEach(function(t){ paidList.appendChild(entryRow(t)); });
     } else {
       paidSection.hidden = true;
     }
@@ -1790,7 +1785,7 @@
     state.tx.slice()
       .sort(function(a,b){ return (b.createdAt||0) - (a.createdAt||0); })
       .forEach(function(t){
-        if (t.type !== "income" || t.paymentMethod !== "credit") return;
+        if (t.type !== "income") return;
         var raw = payerNameOf(t);
         if (!raw) return;
         var key = raw.toLowerCase();
@@ -1801,20 +1796,40 @@
     return names;
   }
 
-  function renderPayerSuggestions(){
-    var row = document.getElementById("payerSuggestions");
-    row.innerHTML = "";
-    knownPayers().slice(0, 12).forEach(function(name){
-      var chip = document.createElement("button");
-      chip.type = "button";
-      chip.className = "chip";
-      chip.textContent = name;
-      chip.addEventListener("click", function(){
-        document.getElementById("payerInput").value = name;
-      });
-      row.appendChild(chip);
+  function renderPayerOptions(preferredName){
+    var sel = document.getElementById("payerSelect");
+    var input = document.getElementById("payerInput");
+    var names = knownPayers();
+    sel.innerHTML = '<option value="">+ New customer…</option>';
+    names.forEach(function(name){
+      var opt = document.createElement("option");
+      opt.value = name;
+      opt.textContent = name;
+      sel.appendChild(opt);
     });
+    var match = preferredName && names.filter(function(n){ return n.toLowerCase() === preferredName.toLowerCase(); })[0];
+    if (match){
+      sel.value = match;
+      input.value = match;
+      input.hidden = true;
+    } else {
+      sel.value = "";
+      input.hidden = false;
+      input.value = preferredName || "";
+    }
   }
+  document.getElementById("payerSelect").addEventListener("change", function(){
+    var v = this.value;
+    var input = document.getElementById("payerInput");
+    if (v){
+      input.value = v;
+      input.hidden = true;
+    } else {
+      input.hidden = false;
+      input.value = "";
+      setTimeout(function(){ input.focus(); }, 10);
+    }
+  });
 
   function payerRequired(){
     return currentType === "income" && (currentPayment === "credit" || selectedCat === "distribution");
@@ -1826,8 +1841,7 @@
     var isCredit = currentPayment === "credit";
     document.getElementById("payerField").querySelector("label").textContent =
       isCredit ? "Customer" : "Customer (required for Distribution)";
-    document.getElementById("payerInput").placeholder = isCredit ? "Who owes you?" : "Who was this sold to?";
-    if (show) renderPayerSuggestions();
+    if (show) renderPayerOptions(document.getElementById("payerInput").value.trim());
   }
 
   function setType(type, preferredCatId){
