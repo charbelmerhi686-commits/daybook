@@ -596,7 +596,7 @@
           <button class="btn danger" id="clearAllBtn" type="button">Clear all data</button>
         </div>
       </div>
-      <p class="about">Daybook saves every entry on this device using IndexedDB with a localStorage mirror.<br>Nothing is sent anywhere, ever.<br>Build 2026-10-13-1</p>
+      <p class="about">Daybook saves every entry on this device using IndexedDB with a localStorage mirror.<br>Nothing is sent anywhere, ever.<br>Build 2026-10-13-2</p>
     </section>
 
   </main>
@@ -1083,7 +1083,7 @@
     if (paidToday.length){
       paidSection.hidden = false;
       paidList.innerHTML = "";
-      paidToday.forEach(function(t){ paidList.appendChild(entryRow(t)); });
+      paidToday.forEach(function(t){ paidList.appendChild(entryRow(t, true)); });
     } else {
       paidSection.hidden = true;
     }
@@ -1180,7 +1180,7 @@
     if (e.target === document.getElementById("creditAccountsOverlay")) document.getElementById("creditAccountsOverlay").hidden = true;
   });
 
-  function entryRow(t){
+  function entryRow(t, showDate){
     var row = document.createElement("div");
     row.className = "entry";
     var color = catColor(catIndex(t.type, t.category));
@@ -1190,10 +1190,17 @@
     var creditBadge = isCredit
       ? '<button type="button" class="credit-badge '+(t.paid ? "paid" : "unpaid")+'">'+creditLabel+'</button>'
       : "";
+    // Today/History show the date once in a day-group heading above a
+    // cluster of entries; a flat cross-date list (the Customers tab) needs
+    // it printed on every row instead, or there's no way to tell them apart.
+    var dateLine = showDate
+      ? '<div class="note" style="color:var(--ink-muted);">'+formatShort(t.date)+'</div>'
+      : "";
     row.innerHTML =
       '<span class="swatch" style="background:'+color+'"></span>' +
       '<div class="body">' +
         '<div class="cat">'+catLabel(t.type, t.category)+'</div>' +
+        dateLine +
         (t.note ? '<div class="note">'+escapeHtml(t.note)+'</div>' : '') +
         creditBadge +
       '</div>' +
@@ -1879,7 +1886,7 @@
 
     var list = document.getElementById("customerInvoiceList");
     list.innerHTML = "";
-    invoices.forEach(function(t){ list.appendChild(entryRow(t)); });
+    invoices.forEach(function(t){ list.appendChild(entryRow(t, true)); });
   }
 
   function renderPayerOptions(preferredName){
