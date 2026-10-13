@@ -540,6 +540,25 @@
       </div>
     </section>
 
+    <!-- ============ CUSTOMERS ============ -->
+    <section class="screen" id="screen-customers" hidden>
+      <div class="field" style="margin-bottom:16px;">
+        <label>Customer</label>
+        <select class="text-input" id="customerPicker"></select>
+      </div>
+
+      <div id="customerEmpty" class="empty-state">Pick a customer above to see every sale you've logged for them — paid and unpaid, with dates.</div>
+
+      <div id="customerSummary" hidden>
+        <div class="metric-grid">
+          <div class="metric-card income"><div class="m-label">Total invoiced</div><div class="m-value mono" id="custTotal">$0.00</div></div>
+          <div class="metric-card"><div class="m-label">Still owed</div><div class="m-value mono" id="custOwed" style="color:var(--warning);">$0.00</div></div>
+        </div>
+        <div class="section-head" style="margin-top:20px;"><h2>Invoices</h2><span class="meta" id="custCount"></span></div>
+        <div class="entry-list" id="customerInvoiceList"></div>
+      </div>
+    </section>
+
     <!-- ============ SETTINGS ============ -->
     <section class="screen" id="screen-settings" hidden>
       <div class="settings-list">
@@ -577,7 +596,7 @@
           <button class="btn danger" id="clearAllBtn" type="button">Clear all data</button>
         </div>
       </div>
-      <p class="about">Daybook saves every entry on this device using IndexedDB with a localStorage mirror.<br>Nothing is sent anywhere, ever.<br>Build 2026-09-19-2</p>
+      <p class="about">Daybook saves every entry on this device using IndexedDB with a localStorage mirror.<br>Nothing is sent anywhere, ever.<br>Build 2026-10-13-1</p>
     </section>
 
   </main>
@@ -596,6 +615,10 @@
     <button class="tab-btn" data-tab="analytics" type="button">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20V10M12 20V4M20 20v-7"/></svg>
       Analytics
+    </button>
+    <button class="tab-btn" data-tab="customers" type="button">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+      Customers
     </button>
     <button class="tab-btn" data-tab="settings" type="button">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.87l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.7 1.7 0 0 0-1.87-.34 1.7 1.7 0 0 0-1 1.55V21a2 2 0 1 1-4 0v-.09a1.7 1.7 0 0 0-1-1.55 1.7 1.7 0 0 0-1.87.34l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.7 1.7 0 0 0 .34-1.87 1.7 1.7 0 0 0-1.55-1H3a2 2 0 1 1 0-4h.09a1.7 1.7 0 0 0 1.55-1 1.7 1.7 0 0 0-.34-1.87l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.7 1.7 0 0 0 1.87.34H9a1.7 1.7 0 0 0 1-1.55V3a2 2 0 1 1 4 0v.09a1.7 1.7 0 0 0 1 1.55 1.7 1.7 0 0 0 1.87-.34l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.7 1.7 0 0 0-.34 1.87V9a1.7 1.7 0 0 0 1.55 1H21a2 2 0 1 1 0 4h-.09a1.7 1.7 0 0 0-1.55 1z"/></svg>
@@ -979,9 +1002,9 @@
   }
 
   // ---------- tabs ----------
-  var TAB_TITLES = { today:["Today","Daybook"], history:["Ledger","History"], analytics:["Overview","Analytics"], settings:["Preferences","Settings"] };
+  var TAB_TITLES = { today:["Today","Daybook"], history:["Ledger","History"], analytics:["Overview","Analytics"], customers:["Accounts","Customers"], settings:["Preferences","Settings"] };
   function switchTab(name){
-    ["today","history","analytics","settings"].forEach(function(t){
+    ["today","history","analytics","customers","settings"].forEach(function(t){
       document.getElementById("screen-"+t).hidden = (t !== name);
     });
     document.querySelectorAll(".tab-btn").forEach(function(b){
@@ -989,10 +1012,11 @@
     });
     document.getElementById("topEyebrow").textContent = TAB_TITLES[name][0];
     document.getElementById("topTitle").textContent = TAB_TITLES[name][1];
-    document.querySelector(".fab").hidden = (name === "settings");
+    document.querySelector(".fab").hidden = (name === "settings" || name === "customers");
     if (name === "analytics") renderAnalytics();
     if (name === "history") renderHistory();
     if (name === "today") renderToday();
+    if (name === "customers") renderCustomerPicker();
   }
   document.querySelectorAll(".tab-btn").forEach(function(b){
     b.addEventListener("click", function(){ switchTab(b.dataset.tab); });
@@ -1093,7 +1117,7 @@
       var today = todayISO();
       items.forEach(function(t){ t.paid = true; t.paidDate = today; });
       save();
-      renderToday(); renderHistory();
+      refreshViews();
       renderCreditAccounts();
       showToast(items.length === 1 ? "Marked paid" : "Marked " + items.length + " sales paid");
     }
@@ -1181,7 +1205,7 @@
         t.paid = !t.paid;
         t.paidDate = t.paid ? todayISO() : undefined;
         save();
-        renderToday(); renderHistory();
+        refreshViews();
       });
     }
     row.querySelector(".del").addEventListener("click", function(e){
@@ -1190,7 +1214,7 @@
         if (!ok) return;
         state.tx = state.tx.filter(function(x){ return x.id !== t.id; });
         save();
-        renderToday(); renderHistory();
+        refreshViews();
       });
     });
     row.addEventListener("click", function(){ openSheet(t); });
@@ -1237,6 +1261,17 @@
     return String(s).replace(/[&<>"']/g, function(c){
       return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c];
     });
+  }
+
+  // Keeps every view of the data in sync after any add/edit/delete/mark-paid,
+  // including the Customers tab's filtered invoice list when it's the one
+  // currently on screen — otherwise it'd keep showing a stale row.
+  function refreshViews(){
+    renderToday();
+    renderHistory();
+    if (!document.getElementById("screen-customers").hidden){
+      renderCustomerPicker();
+    }
   }
 
   // ---------- rendering: History ----------
@@ -1796,6 +1831,57 @@
     return names;
   }
 
+  // ---------- customers tab ----------
+  function renderCustomerPicker(){
+    var sel = document.getElementById("customerPicker");
+    var prev = sel.value;
+    var names = knownPayers().slice().sort(function(a,b){ return a.localeCompare(b); });
+    sel.innerHTML = '<option value="">Choose a customer…</option>';
+    names.forEach(function(name){
+      var opt = document.createElement("option");
+      opt.value = name;
+      opt.textContent = name;
+      sel.appendChild(opt);
+    });
+    if (prev && names.some(function(n){ return n === prev; })){
+      sel.value = prev;
+    }
+    renderCustomerInvoices(sel.value);
+  }
+  document.getElementById("customerPicker").addEventListener("change", function(){
+    renderCustomerInvoices(this.value);
+  });
+
+  function renderCustomerInvoices(name){
+    var summary = document.getElementById("customerSummary");
+    var empty = document.getElementById("customerEmpty");
+    if (!name){
+      summary.hidden = true;
+      empty.hidden = false;
+      return;
+    }
+    var key = name.toLowerCase();
+    var invoices = state.tx.filter(function(t){
+      return t.type === "income" && payerNameOf(t).toLowerCase() === key;
+    }).sort(function(a,b){ return b.date.localeCompare(a.date) || b.createdAt-a.createdAt; });
+
+    empty.hidden = true;
+    summary.hidden = false;
+
+    var total = 0, owed = 0;
+    invoices.forEach(function(t){
+      total += t.amount;
+      if (t.paymentMethod === "credit" && !t.paid) owed += t.amount;
+    });
+    document.getElementById("custTotal").textContent = formatMoney(total);
+    document.getElementById("custOwed").textContent = formatMoney(owed);
+    document.getElementById("custCount").textContent = invoices.length + (invoices.length===1 ? " invoice" : " invoices");
+
+    var list = document.getElementById("customerInvoiceList");
+    list.innerHTML = "";
+    invoices.forEach(function(t){ list.appendChild(entryRow(t)); });
+  }
+
   function renderPayerOptions(preferredName){
     var sel = document.getElementById("payerSelect");
     var input = document.getElementById("payerInput");
@@ -1926,7 +2012,7 @@
     }
     save();
     closeSheet();
-    renderToday(); renderHistory();
+    refreshViews();
     showToast(wasEdit ? "Entry updated" : ((currentType==="income"?"Income":"Expense") + " logged"));
   });
 
@@ -2012,7 +2098,7 @@
       if (!ok) return;
       state.tx = [];
       save();
-      renderToday(); renderHistory();
+      refreshViews();
       showToast("All data cleared");
     });
   });
@@ -2067,7 +2153,7 @@
           valid.forEach(function(t){ t.id = t.id || uid(); t.createdAt = t.createdAt || Date.now(); t.example=false; });
           state.tx = state.tx.concat(valid);
           save();
-          renderToday(); renderHistory();
+          refreshViews();
           showToast("Imported " + valid.length + " entries");
         });
       } catch(err){
